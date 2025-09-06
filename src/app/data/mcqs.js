@@ -1,4 +1,4 @@
-export const mcqs = [
+const mcqs = [
   {
     "id": 101,
     "category": "Swarm vs Agents SDK",
@@ -1729,3 +1729,4 @@ export const mcqs = [
     "explanation": "Guardrails filter and validate data."
   }
 ]
+export default mcqs;
