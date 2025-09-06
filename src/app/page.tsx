@@ -6,17 +6,17 @@ import "./quiz.css";
 export default function Quiz() {
   const total = Array.isArray(mcqs) ? mcqs.length : 0;
   const [currentQ, setCurrentQ] = useState(0);
-  // use array of (number|null) and initialize based on total
   const [answers, setAnswers] = useState<(number | null)[]>(() => Array(total).fill(null));
   const [score, setScore] = useState(0);
   const [finished, setFinished] = useState(false);
+  const [jumpStr, setJumpStr] = useState("");
 
-  // when total changes (e.g. data loaded), ensure answers length matches
   useEffect(() => {
     setAnswers(Array(total).fill(null));
     setCurrentQ(0);
     setScore(0);
     setFinished(false);
+    setJumpStr("");
   }, [total]);
 
   const question = mcqs?.[currentQ];
@@ -40,24 +40,36 @@ export default function Quiz() {
   }
 
   const handleSelect = (idx: number) => {
-    // guard: ensure answers is an array and question not already answered
-    if (!Array.isArray(answers)) return;
-    if (answers[currentQ] !== null) return;
-
     setAnswers(prev => {
       const next = [...prev];
-      // ensure length
       while (next.length < total) next.push(null);
+      const prevAns = next[currentQ];
+      if (prevAns === idx) return next;
+
+      const correctIndex = typeof question.answerIndex === "number" ? question.answerIndex : null;
+      if (correctIndex !== null) {
+        if (prevAns === correctIndex && idx !== correctIndex) {
+          setScore(s => Math.max(0, s - 1));
+        } else if (prevAns !== correctIndex && idx === correctIndex) {
+          setScore(s => s + 1);
+        }
+      }
+
       next[currentQ] = idx;
       return next;
     });
-
-    if (typeof question.answerIndex === "number" && idx === question.answerIndex) {
-      setScore(s => s + 1);
-    }
   };
 
   const progressPercent = Math.round(((currentQ + 1) / Math.max(1, total)) * 100);
+
+  const handleJump = (valStr?: string) => {
+    const s = typeof valStr === "string" ? valStr : jumpStr;
+    const n = parseInt(s, 10);
+    if (!Number.isFinite(n)) return;
+    if (n < 1 || n > total) return;
+    setCurrentQ(n - 1);
+    setJumpStr("");
+  };
 
   if (finished) {
     const percent = Math.round((score / Math.max(1, total)) * 100);
@@ -99,13 +111,37 @@ export default function Quiz() {
     );
   }
 
+  const currentAnswer = answers[currentQ];
+
   return (
     <div className="container">
       <h1>MCQ Practice App</h1>
 
-      <div className="meta" style={{ marginBottom: 10 }}>
+      <div className="meta" style={{ marginBottom: 10, alignItems: "center", display: "flex", gap: 12 }}>
         <div>Question {currentQ + 1} of {total}</div>
-        <div style={{ color: "#98a0b3" }}>{question.category ?? ""}</div>
+
+        {/* Jump to input */}
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+          <label style={{ color: "#98a0b3", fontSize: 13 }}>Jump to</label>
+          <input
+            type="number"
+            min={1}
+            max={total}
+            value={jumpStr}
+            onChange={(e) => setJumpStr(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleJump(); }}
+            style={{ width: 72, padding: "6px 8px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)", color: "#e6eef8" }}
+            aria-label="Jump to question number"
+            placeholder={`1-${total}`}
+          />
+          <button
+            onClick={() => handleJump()}
+            disabled={!jumpStr || Number(jumpStr) < 1 || Number(jumpStr) > total}
+            aria-disabled={!jumpStr || Number(jumpStr) < 1 || Number(jumpStr) > total}
+          >
+            Go
+          </button>
+        </div>
       </div>
 
       <div className="progress-wrap" aria-hidden="true" style={{ marginBottom: 14 }}>
@@ -116,16 +152,13 @@ export default function Quiz() {
 
       <div className="options">
         {question.options?.map((opt, idx) => {
-          const chosen = answers[currentQ] !== null && typeof answers[currentQ] !== "undefined";
-          const className = chosen && answers[currentQ] === idx ? "option selected" : "option";
-
+          const className = currentAnswer !== null && currentAnswer === idx ? "option selected" : "option";
           return (
             <button
               key={idx}
               onClick={() => handleSelect(idx)}
               className={className}
-              aria-pressed={answers[currentQ] === idx}
-              disabled={answers[currentQ] !== null}
+              aria-pressed={currentAnswer === idx}
             >
               <span style={{ fontWeight: 700, width: 28, display: "inline-block", color: "rgba(255,255,255,0.8)" }}>
                 {idx + 1}.
@@ -135,8 +168,6 @@ export default function Quiz() {
           );
         })}
       </div>
-
-      {/* No immediate correct/wrong feedback — results shown at the end */}
 
       <div className="nav-buttons">
         <button
@@ -149,7 +180,6 @@ export default function Quiz() {
         <button
           onClick={() => {
             if (currentQ === total - 1) {
-              // finish quiz when on last question
               setFinished(true);
             } else {
               setCurrentQ(prev => Math.min(total - 1, prev + 1));
